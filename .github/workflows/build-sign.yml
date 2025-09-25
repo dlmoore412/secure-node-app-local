@@ -49,6 +49,6 @@ jobs:
           fi
 
       - uses: slsa-framework/slsa-github-generator@v2.1.0
-        if: ${{ !env.ACT }}   # Skip SLSA locally with act
+        #if: ${{ !env.ACT }}   # Skip SLSA locally with act
         with:
           image: ${{ env.IMAGE }}
