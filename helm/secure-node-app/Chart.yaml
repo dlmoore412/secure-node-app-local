@@ -1,0 +1,5 @@
+apiVersion: v2
+name: secure-node-app
+description: A Helm chart for deploying Secure Node.js app
+version: 0.1.0
+appVersion: "1.0.0"
