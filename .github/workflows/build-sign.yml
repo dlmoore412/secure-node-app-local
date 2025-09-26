@@ -60,6 +60,7 @@ jobs:
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
     with:
       image: ${{ needs.build-and-secure.outputs.IMAGE }}
+      digest: ${{ needs.build-and-secure.outputs.DIGEST }}
     permissions:
       contents: read
       packages: write
