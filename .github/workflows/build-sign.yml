@@ -61,12 +61,12 @@ jobs:
         run: |
           cosign sign --yes --keyless ${{ env.IMAGE }}
 
-  provenance:
-    needs: build-and-secure
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
-    with:
-      digest: ${{ needs.build-and-secure.outputs.digest }}
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
+  # provenance:
+  #   needs: build-and-secure
+  #   uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+  #   with:
+  #     digest: ${{ needs.build-and-secure.outputs.digest }}
+  #   permissions:
+  #     contents: read
+  #     packages: write
+  #     id-token: write
