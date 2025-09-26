@@ -1,82 +1,161 @@
-name: Build, Sign, and Secure
-
-# Top-level permissions to allow OIDC keyless signing
-permissions:
-  contents: read
-  packages: write
-  id-token: write
+name: Build, Sign, Scan, and SLSA
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
 
 jobs:
   build-and-secure:
     runs-on: ubuntu-latest
-    outputs:
-      IMAGE: ${{ steps.set-image.outputs.IMAGE }}
-      DIGEST: ${{ steps.digest.outputs.DIGEST }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    env:
+      REGISTRY: ghcr.io
+      IMAGE_NAME: secure-node-app
+
     steps:
-      # Checkout repo
+      # 1️⃣ Checkout repo
       - uses: actions/checkout@v4
 
-      # Setup Docker Buildx
+      # 2️⃣ Set up Docker Buildx
       - uses: docker/setup-buildx-action@v3
 
-      # Login to GHCR
+      # 3️⃣ Login to GitHub Container Registry
       - uses: docker/login-action@v3
         with:
-          registry: ghcr.io
+          registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build and push Docker image
-      - id: set-image
+      # 4️⃣ Set IMAGE env
+      - name: Set image
         run: |
-          IMAGE=ghcr.io/${{ github.repository }}/secure-node-app:${{ github.sha }}
-          docker build -t $IMAGE .
-          docker push $IMAGE
-          echo "IMAGE=$IMAGE" >> $GITHUB_OUTPUT
+          echo "IMAGE=${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" >> $GITHUB_ENV
+          echo "DIGEST=${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}@sha256:REPLACE_WITH_DIGEST" >> $GITHUB_ENV
 
-      # Get image digest
-      - id: digest
-        run: |
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ steps.set-image.outputs.IMAGE }})
-          echo "DIGEST=$DIGEST" >> $GITHUB_OUTPUT
+      # 5️⃣ Build Docker image
+      - name: Build Docker Image
+        run: docker build -t ${{ env.IMAGE }} .
 
-      # Generate SBOM
+      # 6️⃣ Generate SBOM
       - uses: anchore/sbom-action@v0
         with:
-          image: ${{ steps.set-image.outputs.IMAGE }}
+          image: ${{ env.IMAGE }}
           format: spdx-json
           output-file: sbom.json
 
-      # Scan image for vulnerabilities
+      # 7️⃣ Scan image with Trivy
       - uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ steps.set-image.outputs.IMAGE }}
+          image-ref: ${{ env.IMAGE }}
           format: table
           exit-code: 0
 
-      # Install Cosign
+      # 8️⃣ Sign image with Cosign (keyless)
       - uses: sigstore/cosign-installer@v3
-
-      # Sign container image (keyless with OIDC)
-      - run: |
-          cosign sign --yes ${{ steps.set-image.outputs.IMAGE }}
-          # cosign verify ${{ steps.set-image.outputs.IMAGE }}
-
-      # Generate SLSA provenance (directly)
-      - name: Generate SLSA Provenance
+      - name: Sign image
         run: |
-          # Install slsa-github-generator locally
+          cosign sign --yes ${{ env.IMAGE }}
+      # - name: Verify signature
+      #   run: |
+      #     cosign verify --certificate-identity ".*@users.noreply.github.com" ${{ env.IMAGE }}
+
+      # 9️⃣ Generate SLSA provenance
+      - name: Install SLSA Generator and generate provenance
+        run: |
           git clone --depth 1 https://github.com/slsa-framework/slsa-github-generator.git
           cd slsa-github-generator
+          # Install Go if needed
+          sudo apt-get update && sudo apt-get install -y golang || echo "Go already installed"
+          go build -o slsa-github-generator ./cmd/slsa-github-generator
           ./slsa-github-generator generate \
-            --image ${{ steps.set-image.outputs.IMAGE }} \
-            --digest ${{ steps.digest.outputs.DIGEST }} \
+            --image ${{ env.IMAGE }} \
+            --digest ${{ env.DIGEST }} \
             --output ../slsa-provenance.json
+
+# name: Build, Sign, and Secure
+
+# # Top-level permissions to allow OIDC keyless signing
+# permissions:
+#   contents: read
+#   packages: write
+#   id-token: write
+
+# on:
+#   push:
+#     branches: [ "main" ]
+#   pull_request:
+
+# jobs:
+#   build-and-secure:
+#     runs-on: ubuntu-latest
+#     outputs:
+#       IMAGE: ${{ steps.set-image.outputs.IMAGE }}
+#       DIGEST: ${{ steps.digest.outputs.DIGEST }}
+#     steps:
+#       # Checkout repo
+#       - uses: actions/checkout@v4
+
+#       # Setup Docker Buildx
+#       - uses: docker/setup-buildx-action@v3
+
+#       # Login to GHCR
+#       - uses: docker/login-action@v3
+#         with:
+#           registry: ghcr.io
+#           username: ${{ github.actor }}
+#           password: ${{ secrets.GITHUB_TOKEN }}
+
+#       # Build and push Docker image
+#       - id: set-image
+#         run: |
+#           IMAGE=ghcr.io/${{ github.repository }}/secure-node-app:${{ github.sha }}
+#           docker build -t $IMAGE .
+#           docker push $IMAGE
+#           echo "IMAGE=$IMAGE" >> $GITHUB_OUTPUT
+
+#       # Get image digest
+#       - id: digest
+#         run: |
+#           DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ steps.set-image.outputs.IMAGE }})
+#           echo "DIGEST=$DIGEST" >> $GITHUB_OUTPUT
+
+#       # Generate SBOM
+#       - uses: anchore/sbom-action@v0
+#         with:
+#           image: ${{ steps.set-image.outputs.IMAGE }}
+#           format: spdx-json
+#           output-file: sbom.json
+
+#       # Scan image for vulnerabilities
+#       - uses: aquasecurity/trivy-action@master
+#         with:
+#           image-ref: ${{ steps.set-image.outputs.IMAGE }}
+#           format: table
+#           exit-code: 0
+
+#       # Install Cosign
+#       - uses: sigstore/cosign-installer@v3
+
+#       # Sign container image (keyless with OIDC)
+#       - run: |
+#           cosign sign --yes ${{ steps.set-image.outputs.IMAGE }}
+#           # cosign verify ${{ steps.set-image.outputs.IMAGE }}
+
+#       # Generate SLSA provenance (directly)
+#       - name: Generate SLSA Provenance
+#         run: |
+#           # Install slsa-github-generator locally
+#           git clone --depth 1 https://github.com/slsa-framework/slsa-github-generator.git
+#           cd slsa-github-generator
+#           ./slsa-github-generator generate \
+#             --image ${{ steps.set-image.outputs.IMAGE }} \
+#             --digest ${{ steps.digest.outputs.DIGEST }} \
+#             --output ../slsa-provenance.json
 
 # name: Build, Sign, and Secure
 
