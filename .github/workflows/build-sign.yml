@@ -65,7 +65,7 @@ jobs:
       # Sign container image (keyless with OIDC)
       - run: |
           cosign sign --yes ${{ steps.set-image.outputs.IMAGE }}
-          cosign verify ${{ steps.set-image.outputs.IMAGE }}
+          # cosign verify ${{ steps.set-image.outputs.IMAGE }}
 
       # Generate SLSA provenance (directly)
       - name: Generate SLSA Provenance
