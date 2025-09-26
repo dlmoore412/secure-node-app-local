@@ -7,9 +7,9 @@ on:
 
 permissions:
   contents: read
-  packages: write   # needed to push to GHCR
-  id-token: write   # needed for keyless signing with cosign
-  security-events: write # needed for Trivy or SBOM upload (optional but recommended)
+  packages: write   # needed for GHCR push
+  id-token: write   # needed for cosign keyless signing
+  security-events: write # recommended for Trivy/SBOM
 
 jobs:
   build-and-secure:
@@ -61,8 +61,12 @@ jobs:
       - name: Sign container image (keyless)
         run: cosign sign --keyless ${{ env.IMAGE }}
 
-      # Optional: Generate provenance with SLSA (reusable workflow style)
-      - name: Generate provenance
-        uses: slsa-framework/slsa-github-generator/.github/workflows/builder_container.yml@v2.0.0
-        with:
-          image: ${{ env.IMAGE }}
+  # ✅ Optionally add provenance generation with SLSA
+  # This must be a separate job, not a step
+  provenance:
+    uses: slsa-framework/slsa-github-generator/.github/workflows/builder_container.yml@v2.0.0
+    permissions:
+      id-token: write
+      contents: read
+    with:
+      image: ghcr.io/${{ github.repository }}/secure-node-app:${{ github.sha }}
