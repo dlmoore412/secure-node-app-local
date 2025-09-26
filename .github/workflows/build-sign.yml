@@ -14,6 +14,8 @@ permissions:
 jobs:
   build-and-secure:
     runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.set-digest.outputs.digest }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -28,7 +30,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Define image name
+      - name: Define image
         run: |
           IMAGE=ghcr.io/${{ github.repository }}/secure-node-app:${{ github.sha }}
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
@@ -38,7 +40,8 @@ jobs:
           docker build -t ${{ env.IMAGE }} .
           docker push ${{ env.IMAGE }}
           DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ env.IMAGE }})
-          echo "DIGEST=$DIGEST" >> $GITHUB_ENV
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
+        id: set-digest
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
@@ -61,7 +64,12 @@ jobs:
         run: |
           cosign sign --yes --keyless ${{ env.IMAGE }}
 
-      - name: Generate SLSA provenance
-        uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
-        with:
-          image: ${{ env.DIGEST }}
+  provenance:
+    needs: build-and-secure
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    with:
+      image: ${{ needs.build-and-secure.outputs.digest }}
