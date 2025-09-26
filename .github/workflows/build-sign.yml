@@ -1,5 +1,11 @@
 name: Build, Sign, and Secure
 
+# Top-level permissions to allow OIDC keyless signing
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
 on:
   push:
     branches: [ "main" ]
@@ -10,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       IMAGE: ${{ steps.set-image.outputs.IMAGE }}
+      DIGEST: ${{ steps.digest.outputs.DIGEST }}
     steps:
       # Checkout repo
       - uses: actions/checkout@v4
@@ -31,6 +38,12 @@ jobs:
           docker build -t $IMAGE .
           docker push $IMAGE
           echo "IMAGE=$IMAGE" >> $GITHUB_OUTPUT
+
+      # Get image digest
+      - id: digest
+        run: |
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ steps.set-image.outputs.IMAGE }})
+          echo "DIGEST=$DIGEST" >> $GITHUB_OUTPUT
 
       # Generate SBOM
       - uses: anchore/sbom-action@v0
@@ -54,17 +67,16 @@ jobs:
           cosign sign --yes ${{ steps.set-image.outputs.IMAGE }}
           cosign verify ${{ steps.set-image.outputs.IMAGE }}
 
-  # Generate SLSA provenance
-  slsa:
-    needs: build-and-secure
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
-    with:
-      image: ${{ needs.build-and-secure.outputs.IMAGE }}
-      digest: ${{ needs.build-and-secure.outputs.DIGEST }}
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
+      # Generate SLSA provenance (directly)
+      - name: Generate SLSA Provenance
+        run: |
+          # Install slsa-github-generator locally
+          git clone --depth 1 https://github.com/slsa-framework/slsa-github-generator.git
+          cd slsa-github-generator
+          ./slsa-github-generator generate \
+            --image ${{ steps.set-image.outputs.IMAGE }} \
+            --digest ${{ steps.digest.outputs.DIGEST }} \
+            --output ../slsa-provenance.json
 
 # name: Build, Sign, and Secure
 
