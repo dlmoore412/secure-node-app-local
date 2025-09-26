@@ -60,9 +60,9 @@ jobs:
       - name: Sign image
         run: |
           cosign sign --yes ${{ env.IMAGE }}
-      # - name: Verify signature
-      #   run: |
-      #     cosign verify --certificate-identity ".*@users.noreply.github.com" ${{ env.IMAGE }}
+      - name: Verify signature
+        run: |
+          cosign verify --certificate-identity ".*@users.noreply.github.com" ${{ env.IMAGE }}
 
       # 9️⃣ Generate SLSA provenance
       - name: Install SLSA Generator and generate provenance
