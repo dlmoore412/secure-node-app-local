@@ -30,18 +30,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Define image
+      - name: Build and push Docker image
+        id: set-digest
         run: |
           IMAGE=ghcr.io/${{ github.repository }}/secure-node-app:${{ github.sha }}
-          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
-
-      - name: Build and push Docker image
-        run: |
-          docker build -t ${{ env.IMAGE }} .
-          docker push ${{ env.IMAGE }}
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ env.IMAGE }})
+          docker build -t $IMAGE .
+          docker push $IMAGE
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE)
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
-        id: set-digest
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
@@ -66,10 +63,10 @@ jobs:
 
   provenance:
     needs: build-and-secure
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.1.0
+    with:
+      digest: ${{ needs.build-and-secure.outputs.digest }}
     permissions:
       contents: read
       packages: write
       id-token: write
-    with:
-      image: ${{ needs.build-and-secure.outputs.digest }}
