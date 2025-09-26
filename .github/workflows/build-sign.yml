@@ -1,45 +1,43 @@
-name: Build, Sign, Scan, and SLSA
+name: Build, Push, Sign, and Secure
 
 on:
   push:
     branches: ["main"]
   pull_request:
 
+permissions:
+  contents: read
+  packages: write  # Needed for GHCR
+  id-token: write  # Needed for keyless Cosign
+
 jobs:
   build-and-secure:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-
-    env:
-      REGISTRY: ghcr.io
-      IMAGE_NAME: secure-node-app
-
     steps:
-      # 1️⃣ Checkout repo
+      # 1️⃣ Checkout code
       - uses: actions/checkout@v4
 
       # 2️⃣ Set up Docker Buildx
       - uses: docker/setup-buildx-action@v3
 
-      # 3️⃣ Login to GitHub Container Registry
+      # 3️⃣ Log in to GHCR
       - uses: docker/login-action@v3
         with:
-          registry: ${{ env.REGISTRY }}
+          registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 4️⃣ Set IMAGE env
-      - name: Set image
+      # 4️⃣ Build Docker image
+      - name: Build Docker image
         run: |
-          echo "IMAGE=${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" >> $GITHUB_ENV
-          echo "DIGEST=${{ env.REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}@sha256:REPLACE_WITH_DIGEST" >> $GITHUB_ENV
+          IMAGE=ghcr.io/${{ github.repository }}/secure-node-app:${{ github.sha }}
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          docker build -t $IMAGE .
 
-      # 5️⃣ Build Docker image
-      - name: Build Docker Image
-        run: docker build -t ${{ env.IMAGE }} .
+      # 5️⃣ Push image to GHCR
+      - name: Push Docker image
+        run: |
+          docker push ${{ env.IMAGE }}
 
       # 6️⃣ Generate SBOM
       - uses: anchore/sbom-action@v0
@@ -48,7 +46,7 @@ jobs:
           format: spdx-json
           output-file: sbom.json
 
-      # 7️⃣ Scan image with Trivy
+      # 7️⃣ Trivy vulnerability scan
       - uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.IMAGE }}
@@ -57,25 +55,10 @@ jobs:
 
       # 8️⃣ Sign image with Cosign (keyless)
       - uses: sigstore/cosign-installer@v3
-      - name: Sign image
+      - name: Sign Docker image
         run: |
           cosign sign --yes ${{ env.IMAGE }}
-      - name: Verify signature
-        run: |
           cosign verify --certificate-identity ".*@users.noreply.github.com" ${{ env.IMAGE }}
-
-      # 9️⃣ Generate SLSA provenance
-      - name: Install SLSA Generator and generate provenance
-        run: |
-          git clone --depth 1 https://github.com/slsa-framework/slsa-github-generator.git
-          cd slsa-github-generator
-          # Install Go if needed
-          sudo apt-get update && sudo apt-get install -y golang || echo "Go already installed"
-          go build -o slsa-github-generator ./cmd/slsa-github-generator
-          ./slsa-github-generator generate \
-            --image ${{ env.IMAGE }} \
-            --digest ${{ env.DIGEST }} \
-            --output ../slsa-provenance.json
 
 # name: Build, Sign, and Secure
 
