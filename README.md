@@ -33,7 +33,7 @@ This project demonstrates a **modern secure software supply chain**:
 
 The GitHub Actions workflow `build-sign.yml` orchestrates the entire process:
 
-```mermaid
+mermaid
 flowchart TD
     A[GitHub Push / PR] --> B[Checkout Code]
     B --> C[Build Docker Image]
@@ -42,7 +42,24 @@ flowchart TD
     D --> F[Scan Image with Trivy]
     D --> G[Sign Image with Cosign (keyless)]
     G --> H[Optional: SLSA Provenance Generation]
+Legend:
 
+GHCR = GitHub Container Registry
+
+SBOM = Software Bill of Materials
+
+## Getting Started
+
+Prerequisites
+
+Docker
+
+GitHub CLI
+ (optional, for local testing)
+
+macOS, Linux, or Windows environment
+
+###Local Test
 # Clone the repo
 git clone https://github.com/dlmoore412/secure-node-app-local.git
 cd secure-node-app-local
@@ -53,13 +70,16 @@ docker build -t secure-node-app:local .
 # Run the container
 docker run -p 3000:3000 secure-node-app:local
 
-
+###SBOM & Vulnerability Scanning
+SBOM (Software Bill of Materials) tracks all dependencies and their versions:
 # Generate SBOM (via GitHub Action)
 # Outputs: sbom.json
 
+Trivy scans the image for vulnerabilities:
 # Scan locally
 trivy image secure-node-app:local
 
+###Container Signing with Cosign
 # Sign image
 cosign sign --yes ghcr.io/dlmoore412/secure-node-app-local/secure-node-app:<SHA>
 
@@ -74,3 +94,8 @@ flowchart TD
 flowchart TD
     A[Build Docker Image] --> B[SLSA Generator]
     B --> C[slsa-provenance.json]
+Notes:
+
+In GitHub Actions, id-token: write permission is required for keyless signing.
+
+Use SHA digests for production builds to avoid tag ambiguity.
