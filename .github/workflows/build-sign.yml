@@ -48,7 +48,8 @@ jobs:
             cosign sign --keyless ${{ env.IMAGE }}
           fi
 
-      - uses: slsa-framework/slsa-github-generator@v2.1.0
-        #if: ${{ !env.ACT }}   # Skip SLSA locally with act
+      - name: Generate SLSA Provenance
+        uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
         with:
-          image: ${{ env.IMAGE }}
+          base64-subjects: ${{ steps.build.outputs.hashes }}
+
