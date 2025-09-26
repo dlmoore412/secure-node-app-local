@@ -59,7 +59,7 @@ jobs:
 
       - name: Sign container image (keyless)
         run: |
-          cosign sign --yes --keyless ${{ env.IMAGE }}
+          cosign sign ${{ env.IMAGE }}
 
   # provenance:
   #   needs: build-and-secure
