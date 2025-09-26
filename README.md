@@ -1,6 +1,6 @@
 # Secure Node App
 
-[![Build & Sign](https://github.com/dlmoore412/secure-node-app-local/actions/workflows/build-sign.yml/badge.svg)](https://github.com/dlmoore412/secure-node-app-local/actions/workflows/build-sign.yml)
+[![Build & Sign](https://github.com/#name/secure-node-app-local/actions/workflows/build-sign.yml/badge.svg)](https://github.com/$name/secure-node-app-local/actions/workflows/build-sign.yml)
 
 A sample Node.js application demonstrating **secure build, signing, SBOM generation, and vulnerability scanning** using GitHub Actions, Cosign, Anchore, and Trivy.
 
@@ -61,7 +61,7 @@ macOS, Linux, or Windows environment
 
 ###Local Test
 # Clone the repo
-git clone https://github.com/dlmoore412/secure-node-app-local.git
+git clone https://github.com/#name/secure-node-app-local.git
 cd secure-node-app-local
 
 # Build Docker image locally
@@ -81,10 +81,10 @@ trivy image secure-node-app:local
 
 ###Container Signing with Cosign
 # Sign image
-cosign sign --yes ghcr.io/dlmoore412/secure-node-app-local/secure-node-app:<SHA>
+cosign sign --yes ghcr.io/#name/secure-node-app-local/secure-node-app:<SHA>
 
 # Verify signature
-cosign verify --certificate-oidc-issuer "https://token.actions.githubusercontent.com" ghcr.io/dlmoore412/secure-node-app-local/secure-node-app:<SHA>
+cosign verify --certificate-oidc-issuer "https://token.actions.githubusercontent.com" ghcr.io/#name/secure-node-app-local/secure-node-app:<SHA>
 
 flowchart TD
     A[Docker Image] --> B[Cosign Keyless Sign]
