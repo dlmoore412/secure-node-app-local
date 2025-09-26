@@ -61,11 +61,7 @@ jobs:
         run: |
           cosign sign --yes --keyless ${{ env.IMAGE }}
 
-  provenance:
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
-    permissions:
-      id-token: write
-      contents: read
-      packages: write
-    with:
-      image: ${{ env.DIGEST }}
+      - name: Generate SLSA provenance
+        uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
+        with:
+          image: ${{ env.DIGEST }}
