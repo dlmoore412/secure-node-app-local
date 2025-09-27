@@ -79,6 +79,21 @@ jobs:
       registry-username: ${{ github.actor }}
     secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
+  verify-provenance:
+    needs: [provenance]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install slsa-verifier
+        run: |
+          curl -sL https://github.com/slsa-framework/slsa-verifier/releases/latest/download/slsa-verifier-linux-amd64 -o /usr/local/bin/slsa-verifier
+          chmod +x /usr/local/bin/slsa-verifier
+      - name: Verify provenance
+        run: |
+          slsa-verifier verify-image \
+            ${{ needs.build.outputs.digest }} \
+            --source-uri github.com/${{ github.repository }} \
+            --builder-id https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v1
 
 
       # # Generate SLSA provenance (directly)
