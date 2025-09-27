@@ -66,17 +66,25 @@ jobs:
       - run: |
           cosign sign --yes ${{ steps.set-image.outputs.IMAGE }}
           # cosign verify ${{ steps.set-image.outputs.IMAGE }}
+  provenance:
+    permissions:
+      actions: read # Needed for detection of GitHub Actions environment.
+      id-token: write # Needed for provenance signing and ID.
+      contents: write # Needed for release uploads.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.4.0
+    with:
+      base64-subjects: "${{ needs.build.outputs.hashes }}"
 
-#       # Generate SLSA provenance (directly)
-#       - name: Generate SLSA Provenance
-#         run: |
-#           # Install slsa-github-generator locally
-#           git clone --depth 1 https://github.com/slsa-framework/slsa-github-generator.git
-#           cd slsa-github-generator
-#           ./slsa-github-generator generate \
-#             --image ${{ steps.set-image.outputs.IMAGE }} \
-#             --digest ${{ steps.digest.outputs.DIGEST }} \
-#             --output ../slsa-provenance.json
+      # # Generate SLSA provenance (directly)
+      # - name: Generate SLSA Provenance
+      #   run: |
+      #     # Install slsa-github-generator locally
+      #     git clone --depth 1 https://github.com/slsa-framework/slsa-github-generator.git
+      #     cd slsa-github-generator
+      #     ./slsa-github-generator generate \
+      #       --image ${{ steps.set-image.outputs.IMAGE }} \
+      #       --digest ${{ steps.digest.outputs.DIGEST }} \
+      #       --output ../slsa-provenance.json
 
 # name: Build, Sign, and Secure
 
