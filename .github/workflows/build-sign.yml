@@ -1,99 +1,169 @@
-name: Build, Sign, and Secure
-
-# Top-level permissions to allow OIDC keyless signing
-permissions:
-  contents: read
-  packages: write
-  id-token: write
+name: Secure Node App Supply Chain
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   pull_request:
+    branches: [ main ]
 
 jobs:
-  build-and-secure:
+  build:
     runs-on: ubuntu-latest
     outputs:
-      IMAGE: ${{ steps.set-image.outputs.IMAGE }}
-      DIGEST: ${{ steps.digest.outputs.DIGEST }}
+      image: ${{ steps.build-image.outputs.image }}
+      digest: ${{ steps.build-image.outputs.digest }}
     steps:
-      # Checkout repo
       - uses: actions/checkout@v4
 
-      # Setup Docker Buildx
-      - uses: docker/setup-buildx-action@v3
-
-      # Login to GHCR
-      - uses: docker/login-action@v3
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build and push Docker image
-      - id: set-image
-        run: |
-          IMAGE=ghcr.io/${{ github.repository }}/secure-node-app:${{ github.sha }}
-          docker build -t $IMAGE .
-          docker push $IMAGE
-          echo "IMAGE=$IMAGE" >> $GITHUB_OUTPUT
-
-      # Get image digest
-      - id: digest
-        run: |
-          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ steps.set-image.outputs.IMAGE }})
-          echo "DIGEST=$DIGEST" >> $GITHUB_OUTPUT
-
-      # Generate SBOM
-      - uses: anchore/sbom-action@v0
+      - name: Build and push Docker image
+        id: build-image
+        uses: docker/build-push-action@v5
         with:
-          image: ${{ steps.set-image.outputs.IMAGE }}
-          format: spdx-json
-          output-file: sbom.json
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}/secure-node-app:latest
+          outputs: type=image,name=ghcr.io/${{ github.repository }}/secure-node-app,push-by-digest=true,name-canonical=true
+      - name: Export image digest
+        run: |
+          digest=$(jq -r '.[0].digest' <<<"${{ steps.build-image.outputs.metadata }}")
+          echo "digest=$digest" >> $GITHUB_OUTPUT
+        shell: bash
 
-      # Scan image for vulnerabilities
-      - uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ steps.set-image.outputs.IMAGE }}
-          format: table
-          exit-code: 0
-
-      # Install Cosign
-      - uses: sigstore/cosign-installer@v3
-
-      # Sign container image (keyless with OIDC)
-      - run: |
-          cosign sign --yes ${{ steps.set-image.outputs.IMAGE }}
-          # cosign verify ${{ steps.set-image.outputs.IMAGE }}
   provenance:
-    needs: [build-and-secure]
+    needs: [build]
     permissions:
       actions: read
       id-token: write
       packages: write
-    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v1.4.0
     with:
-      image: ${{ needs.build-and-secure.outputs.IMAGE }}
-      digest: ${{ needs.build-and-secure.outputs.DIGEST }}
+      image: ${{ needs.build.outputs.image }}
+      digest: ${{ needs.build.outputs.digest }}
       registry-username: ${{ github.actor }}
-    secrets:
       registry-password: ${{ secrets.GITHUB_TOKEN }}
+
   verify-provenance:
+    if: always()
     needs: [provenance]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Install slsa-verifier
         run: |
           curl -sL https://github.com/slsa-framework/slsa-verifier/releases/latest/download/slsa-verifier-linux-amd64 -o /usr/local/bin/slsa-verifier
           chmod +x /usr/local/bin/slsa-verifier
+
       - name: Verify provenance
         run: |
           slsa-verifier verify-image \
-            ${{ needs.build.outputs.digest }} \
+            ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }} \
             --source-uri github.com/${{ github.repository }} \
             --builder-id https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v1
+
+# name: Build, Sign, and Secure
+
+# # Top-level permissions to allow OIDC keyless signing
+# permissions:
+#   contents: read
+#   packages: write
+#   id-token: write
+
+# on:
+#   push:
+#     branches: [ "main" ]
+#   pull_request:
+
+# jobs:
+#   build-and-secure:
+#     runs-on: ubuntu-latest
+#     outputs:
+#       IMAGE: ${{ steps.set-image.outputs.IMAGE }}
+#       DIGEST: ${{ steps.digest.outputs.DIGEST }}
+#     steps:
+#       # Checkout repo
+#       - uses: actions/checkout@v4
+
+#       # Setup Docker Buildx
+#       - uses: docker/setup-buildx-action@v3
+
+#       # Login to GHCR
+#       - uses: docker/login-action@v3
+#         with:
+#           registry: ghcr.io
+#           username: ${{ github.actor }}
+#           password: ${{ secrets.GITHUB_TOKEN }}
+
+#       # Build and push Docker image
+#       - id: set-image
+#         run: |
+#           IMAGE=ghcr.io/${{ github.repository }}/secure-node-app:${{ github.sha }}
+#           docker build -t $IMAGE .
+#           docker push $IMAGE
+#           echo "IMAGE=$IMAGE" >> $GITHUB_OUTPUT
+
+#       # Get image digest
+#       - id: digest
+#         run: |
+#           DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ steps.set-image.outputs.IMAGE }})
+#           echo "DIGEST=$DIGEST" >> $GITHUB_OUTPUT
+
+#       # Generate SBOM
+#       - uses: anchore/sbom-action@v0
+#         with:
+#           image: ${{ steps.set-image.outputs.IMAGE }}
+#           format: spdx-json
+#           output-file: sbom.json
+
+#       # Scan image for vulnerabilities
+#       - uses: aquasecurity/trivy-action@master
+#         with:
+#           image-ref: ${{ steps.set-image.outputs.IMAGE }}
+#           format: table
+#           exit-code: 0
+
+#       # Install Cosign
+#       - uses: sigstore/cosign-installer@v3
+
+#       # Sign container image (keyless with OIDC)
+#       - run: |
+#           cosign sign --yes ${{ steps.set-image.outputs.IMAGE }}
+#           # cosign verify ${{ steps.set-image.outputs.IMAGE }}
+#   provenance:
+#     needs: [build-and-secure]
+#     permissions:
+#       actions: read
+#       id-token: write
+#       packages: write
+#     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v2.0.0
+#     with:
+#       image: ${{ needs.build-and-secure.outputs.IMAGE }}
+#       digest: ${{ needs.build-and-secure.outputs.DIGEST }}
+#       registry-username: ${{ github.actor }}
+#     secrets:
+#       registry-password: ${{ secrets.GITHUB_TOKEN }}
+#   verify-provenance:
+#     needs: [provenance]
+#     runs-on: ubuntu-latest
+#     steps:
+#       - uses: actions/checkout@v4
+#       - name: Install slsa-verifier
+#         run: |
+#           curl -sL https://github.com/slsa-framework/slsa-verifier/releases/latest/download/slsa-verifier-linux-amd64 -o /usr/local/bin/slsa-verifier
+#           chmod +x /usr/local/bin/slsa-verifier
+#       - name: Verify provenance
+#         run: |
+#           slsa-verifier verify-image \
+#             ${{ needs.build.outputs.digest }} \
+#             --source-uri github.com/${{ github.repository }} \
+#             --builder-id https://github.com/slsa-framework/slsa-github-generator/.github/workflows/generator_container_slsa3.yml@v1
 
 
       # # Generate SLSA provenance (directly)
